@@ -4,14 +4,32 @@ A local Python command-line tool that converts Walmart invoice PDFs into an Exce
 
 Drop Walmart order/invoice PDFs into an input folder, run one command, and the app creates a workbook where each invoice becomes its own worksheet. The generated sheets include item costs, editable participant flags, per-person formulas, and final totals.
 
+## How To Use
+
+1. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+2. Put your Walmart invoice PDFs into the `input/` folder.
+3. Run:
+
+```bash
+python src.main.py
+```
+
+The app automatically reads from `input/` and writes to `output/walmart_orders.xlsx`.
+
 ## What It Does
 
 - Reads every `.pdf` file from an input folder.
 - Extracts text from Walmart invoice/order PDFs.
 - Parses order date, order number, item names, item costs, tax, and total.
 - Creates or updates a single `.xlsx` workbook.
-- Adds one worksheet per invoice, named by order date, such as `1 March` or `16 June`.
-- Keeps duplicate sheet names safe by appending a number, such as `16 June 2`.
+- Adds one worksheet per invoice, named by order date, such as `1 March 2024` or `16 June 2025`.
+- Sorts worksheets in ascending order by invoice date.
+- Keeps duplicate sheet names safe by appending a number, such as `16 June 2025 2`.
 - Adds formulas so the split totals update automatically when participant flags are edited.
 
 ## Current Scope
@@ -41,17 +59,15 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-## Usage
+## Advanced Usage
 
-1. Put Walmart invoice PDFs into the `input/` folder.
-2. Run:
+The simple command above is usually enough. To choose custom folders or a custom workbook path, use:
 
 ```bash
 python src/main.py --input input --output output/walmart_orders.xlsx
 ```
 
-3. Open `output/walmart_orders.xlsx` in Excel, Apple Numbers, or Google Sheets.
-4. In each worksheet, enter `1` or `0` in the participant flag columns to mark who shared each item.
+Open `output/walmart_orders.xlsx` in Excel, Apple Numbers, or Google Sheets. In each worksheet, enter `1` or `0` in the participant flag columns to mark who shared each item.
 
 Example output:
 
@@ -59,7 +75,7 @@ Example output:
 Found 6 PDF files.
 Parsed 6 invoices.
 Workbook: output/walmart_orders.xlsx
-Added sheets: 1 March, 31 March, 1 May, 16 May, 25 May, 16 June
+Added sheets: 1 March 2024, 31 March 2024, 1 May 2024, 16 May 2024, 25 May 2024, 16 June 2024
 Failed PDFs: 0
 Done.
 ```
@@ -71,7 +87,7 @@ Each invoice gets one worksheet.
 Rows:
 
 ```text
-Row 1: merged title row, e.g. Walmart 25 May
+Row 1: merged title row, e.g. Walmart 25 May 2024
 Row 2: column headers
 Row 3+: invoice item rows
 Final row: Total
@@ -156,21 +172,3 @@ src/
 tests/
   test_*.py
 ```
-
-## Limitations
-
-- No OCR for scanned PDFs.
-- No web UI.
-- No Google Sheets API integration.
-- No cloud upload.
-- No AI/LLM parsing.
-- The split-sheet layout and participants are currently hardcoded.
-
-## Future Ideas
-
-- Add a summary sheet across all orders.
-- Detect duplicate PDFs by order number.
-- Add monthly spending summaries.
-- Make participants configurable.
-- Add OCR fallback for scanned invoices.
-- Add Google Sheets export.

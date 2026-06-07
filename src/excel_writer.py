@@ -28,6 +28,7 @@ GREEN_FILL = PatternFill("solid", fgColor="D9EAD3")
 HEADER_FILL = PatternFill("solid", fgColor="D9EAD3")
 CURRENCY_FORMAT = "0.00"
 INVALID_SHEET_CHARS = re.compile(r"[:\\/?*\[\]]")
+DATE_SHEET_RE = re.compile(r"^(?P<day>\d{1,2})\s+(?P<month>[A-Za-z]+)\s+(?P<year>\d{4})(?:\s+\d+)?$")
 
 
 def write_invoices(invoices: list[Invoice], output_path: Path) -> list[str]:
@@ -38,12 +39,13 @@ def write_invoices(invoices: list[Invoice], output_path: Path) -> list[str]:
         workbook.remove(workbook["Sheet"])
 
     added_sheets: list[str] = []
-    for invoice in invoices:
+    for invoice in sorted(invoices, key=lambda current_invoice: current_invoice.order_date):
         sheet_name = unique_sheet_name(workbook.sheetnames, date_sheet_name(invoice.order_date))
         worksheet = workbook.create_sheet(sheet_name)
         write_invoice_sheet(worksheet, invoice)
         added_sheets.append(sheet_name)
 
+    sort_worksheets_by_date(workbook)
     workbook.save(output_path)
     return added_sheets
 
@@ -62,7 +64,19 @@ def write_invoice_sheet(worksheet: Worksheet, invoice: Invoice) -> None:
 
 
 def date_sheet_name(order_date: date) -> str:
-    return f"{order_date.day} {order_date.strftime('%B')}"
+    return f"{order_date.day} {order_date.strftime('%B')} {order_date.year}"
+
+
+def sort_worksheets_by_date(workbook: Workbook) -> None:
+    original_positions = {worksheet.title: index for index, worksheet in enumerate(workbook.worksheets)}
+
+    def sort_key(worksheet: Worksheet) -> tuple[int, date, int]:
+        sheet_date = _date_from_sheet_name(worksheet.title)
+        if sheet_date is None:
+            return (1, date.max, original_positions[worksheet.title])
+        return (0, sheet_date, original_positions[worksheet.title])
+
+    workbook._sheets = sorted(workbook._sheets, key=sort_key)
 
 
 def unique_sheet_name(existing_names: list[str], desired_name: str) -> str:
@@ -82,6 +96,39 @@ def unique_sheet_name(existing_names: list[str], desired_name: str) -> str:
 def sanitize_sheet_name(name: str) -> str:
     sanitized = INVALID_SHEET_CHARS.sub(" ", name).strip() or "Sheet"
     return sanitized[:31]
+
+
+def _date_from_sheet_name(sheet_name: str) -> date | None:
+    match = DATE_SHEET_RE.match(sheet_name)
+    if not match:
+        return None
+
+    try:
+        return date(
+            int(match.group("year")),
+            _month_number(match.group("month")),
+            int(match.group("day")),
+        )
+    except ValueError:
+        return None
+
+
+def _month_number(month_name: str) -> int:
+    months = {
+        "January": 1,
+        "February": 2,
+        "March": 3,
+        "April": 4,
+        "May": 5,
+        "June": 6,
+        "July": 7,
+        "August": 8,
+        "September": 9,
+        "October": 10,
+        "November": 11,
+        "December": 12,
+    }
+    return months[month_name]
 
 
 def _write_title(worksheet: Worksheet, title: str) -> None:

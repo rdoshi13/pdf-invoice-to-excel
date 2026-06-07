@@ -31,8 +31,8 @@ def test_write_invoice_sheet_layout_and_formulas(tmp_path):
     workbook = load_workbook(output_path, data_only=False)
     worksheet = workbook[added[0]]
 
-    assert added == ["1 May"]
-    assert worksheet["A1"].value == "Walmart 1 May"
+    assert added == ["1 May 2024"]
+    assert worksheet["A1"].value == "Walmart 1 May 2024"
     assert "A1:N1" in [str(cell_range) for cell_range in worksheet.merged_cells.ranges]
     assert [worksheet.cell(row=2, column=column).value for column in range(1, 15)] == [
         "Items",
@@ -78,8 +78,26 @@ def test_duplicate_sheet_names_append_safely(tmp_path):
     first = write_invoices([make_invoice(date(2024, 6, 16))], output_path)
     second = write_invoices([make_invoice(date(2024, 6, 16), "other.pdf")], output_path)
 
-    assert first == ["16 June"]
-    assert second == ["16 June 2"]
+    assert first == ["16 June 2024"]
+    assert second == ["16 June 2024 2"]
     workbook = load_workbook(output_path)
-    assert "16 June" in workbook.sheetnames
-    assert "16 June 2" in workbook.sheetnames
+    assert "16 June 2024" in workbook.sheetnames
+    assert "16 June 2024 2" in workbook.sheetnames
+
+
+def test_worksheets_are_sorted_by_date(tmp_path):
+    output_path = tmp_path / "walmart_orders.xlsx"
+
+    added = write_invoices(
+        [
+            make_invoice(date(2024, 8, 18)),
+            make_invoice(date(2024, 5, 12)),
+            make_invoice(date(2025, 2, 18)),
+            make_invoice(date(2024, 4, 20)),
+        ],
+        output_path,
+    )
+
+    assert added == ["20 April 2024", "12 May 2024", "18 August 2024", "18 February 2025"]
+    workbook = load_workbook(output_path)
+    assert workbook.sheetnames == ["20 April 2024", "12 May 2024", "18 August 2024", "18 February 2025"]

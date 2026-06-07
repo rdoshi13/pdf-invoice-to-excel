@@ -39,5 +39,5 @@ def test_cli_processes_multiple_pdfs_with_mocked_extraction(tmp_path, monkeypatc
     assert result.found_pdf_count == 2
     assert result.parsed_count == 2
     assert result.failed_files == []
-    assert result.added_sheets == ["1 May", "2 May"]
-    assert load_workbook(output_path).sheetnames == ["1 May", "2 May"]
+    assert result.added_sheets == ["1 May 2024", "2 May 2024"]
+    assert load_workbook(output_path).sheetnames == ["1 May 2024", "2 May 2024"]

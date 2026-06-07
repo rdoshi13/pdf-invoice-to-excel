@@ -33,6 +33,14 @@ def test_parse_invoice_order_fields():
     assert invoice.total == Decimal("37.49")
 
 
+def test_parse_invoice_abbreviated_month_order_date():
+    text = SAMPLE_TEXT.replace("May 12, 2026 order", "Jun 10, 2024 order")
+
+    invoice = parse_invoice_text(text, Path("invoice.pdf"))
+
+    assert invoice.order_date.isoformat() == "2024-06-10"
+
+
 def test_parse_invoice_items_and_statuses():
     invoice = parse_invoice_text(SAMPLE_TEXT, Path("invoice.pdf"))
 

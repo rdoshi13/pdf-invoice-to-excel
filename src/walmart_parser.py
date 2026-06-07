@@ -61,7 +61,14 @@ def _parse_order_date(raw_text: str):
     if not match:
         raise ParseError("Order date not found")
 
-    return datetime.strptime(match.group(0).replace(" order", ""), "%B %d, %Y").date()
+    date_text = match.group(0).replace(" order", "")
+    for date_format in ("%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.strptime(date_text, date_format).date()
+        except ValueError:
+            continue
+
+    raise ParseError(f"Order date format not supported: {date_text}")
 
 
 def _parse_order_number(raw_text: str) -> str | None:
