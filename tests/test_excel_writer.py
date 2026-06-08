@@ -14,8 +14,8 @@ def make_invoice(order_date: date, source: str = "invoice.pdf") -> Invoice:
         order_date=order_date,
         order_number="123",
         items=[
-            InvoiceItem("Apple", Decimal("2.71")),
-            InvoiceItem("Normal Bananas", Decimal("1.42")),
+            InvoiceItem("Apple", Decimal("2.71"), quantity="2"),
+            InvoiceItem("Normal Bananas", Decimal("1.42"), quantity="1"),
         ],
         tax=Decimal("0.71"),
         total=Decimal("4.84"),
@@ -23,60 +23,86 @@ def make_invoice(order_date: date, source: str = "invoice.pdf") -> Invoice:
     )
 
 
-def test_write_invoice_sheet_layout_and_formulas(tmp_path):
+def test_write_invoice_sheet_layout_and_formulas_for_three_participants(tmp_path):
     output_path = tmp_path / "walmart_orders.xlsx"
 
-    added = write_invoices([make_invoice(date(2024, 5, 1))], output_path)
+    added = write_invoices([make_invoice(date(2024, 5, 1))], output_path, ["Alice", "Bob", "Charlie"])
 
     workbook = load_workbook(output_path, data_only=False)
     worksheet = workbook[added[0]]
 
     assert added == ["1 May 2024"]
     assert worksheet["A1"].value == "Walmart 1 May 2024"
-    assert "A1:N1" in [str(cell_range) for cell_range in worksheet.merged_cells.ranges]
-    assert [worksheet.cell(row=2, column=column).value for column in range(1, 15)] == [
+    assert "A1:K1" in [str(cell_range) for cell_range in worksheet.merged_cells.ranges]
+    assert [worksheet.cell(row=2, column=column).value for column in range(1, 12)] == [
         "Items",
+        "Qty",
         "Cost",
-        "Rakshit",
-        "Ansh",
-        "Rishabh",
-        "Varun",
-        "Anuj",
+        "Alice",
+        "Bob",
+        "Charlie",
         "Involved",
         "Per Person",
-        "Rakshit",
-        "Ansh",
-        "Rishabh",
-        "Varun",
-        "Anuj",
+        "Alice",
+        "Bob",
+        "Charlie",
     ]
+    assert worksheet["B3"].value == "2"
     assert worksheet["A5"].value == "Walmart Tax"
-    assert worksheet["H3"].value == "=SUM(C3:G3)"
-    assert worksheet["I3"].value == "=IF(H3=0,0,B3/H3)"
-    assert worksheet["J3"].value == "=IF(C3=1,I3,0)"
-    assert worksheet["N3"].value == "=IF(G3=1,I3,0)"
+    assert worksheet["G3"].value == "=SUM(D3:F3)"
+    assert worksheet["H3"].value == "=IF(G3=0,0,C3/G3)"
+    assert worksheet["I3"].value == "=IF(D3=1,H3,0)"
+    assert worksheet["K3"].value == "=IF(F3=1,H3,0)"
     assert worksheet["A6"].value == "Total"
-    assert worksheet["B6"].value == "=SUM(B3:B5)"
-    assert worksheet["J6"].value == "=SUM(J3:J5)"
+    assert worksheet["C6"].value == "=SUM(C3:C5)"
+    assert worksheet["I6"].value == "=SUM(I3:I5)"
+    assert worksheet["K6"].value == "=SUM(K3:K5)"
     assert worksheet.freeze_panes == "A3"
 
 
-def test_write_invoice_sheet_anuj_excluded_after_november_8(tmp_path):
+def test_write_invoice_sheet_layout_for_one_participant(tmp_path):
     output_path = tmp_path / "walmart_orders.xlsx"
 
-    added = write_invoices([make_invoice(date(2024, 11, 8))], output_path)
+    added = write_invoices([make_invoice(date(2024, 5, 1))], output_path, ["Alice"])
 
     worksheet = load_workbook(output_path, data_only=False)[added[0]]
-    assert worksheet["G3"].value is None
-    assert worksheet["N3"].value == "=0"
-    assert worksheet["N6"].value == "=SUM(N3:N5)"
+    assert "A1:G1" in [str(cell_range) for cell_range in worksheet.merged_cells.ranges]
+    assert [worksheet.cell(row=2, column=column).value for column in range(1, 8)] == [
+        "Items",
+        "Qty",
+        "Cost",
+        "Alice",
+        "Involved",
+        "Per Person",
+        "Alice",
+    ]
+    assert worksheet["E3"].value == "=SUM(D3:D3)"
+    assert worksheet["F3"].value == "=IF(E3=0,0,C3/E3)"
+    assert worksheet["G3"].value == "=IF(D3=1,F3,0)"
+
+
+def test_write_invoice_sheet_layout_for_six_participants(tmp_path):
+    output_path = tmp_path / "walmart_orders.xlsx"
+    participants = ["A", "B", "C", "D", "E", "F"]
+
+    added = write_invoices([make_invoice(date(2024, 5, 1))], output_path, participants)
+
+    worksheet = load_workbook(output_path, data_only=False)[added[0]]
+    assert "A1:Q1" in [str(cell_range) for cell_range in worksheet.merged_cells.ranges]
+    assert worksheet["I2"].value == "F"
+    assert worksheet["J2"].value == "Involved"
+    assert worksheet["K2"].value == "Per Person"
+    assert worksheet["Q2"].value == "F"
+    assert worksheet["J3"].value == "=SUM(D3:I3)"
+    assert worksheet["K3"].value == "=IF(J3=0,0,C3/J3)"
+    assert worksheet["Q3"].value == "=IF(I3=1,K3,0)"
 
 
 def test_duplicate_sheet_names_append_safely(tmp_path):
     output_path = tmp_path / "walmart_orders.xlsx"
 
-    first = write_invoices([make_invoice(date(2024, 6, 16))], output_path)
-    second = write_invoices([make_invoice(date(2024, 6, 16), "other.pdf")], output_path)
+    first = write_invoices([make_invoice(date(2024, 6, 16))], output_path, ["Alice", "Bob"])
+    second = write_invoices([make_invoice(date(2024, 6, 16), "other.pdf")], output_path, ["Alice", "Bob"])
 
     assert first == ["16 June 2024"]
     assert second == ["16 June 2024 2"]
@@ -96,6 +122,7 @@ def test_worksheets_are_sorted_by_date(tmp_path):
             make_invoice(date(2024, 4, 20)),
         ],
         output_path,
+        ["Alice", "Bob"],
     )
 
     assert added == ["20 April 2024", "12 May 2024", "18 August 2024", "18 February 2025"]

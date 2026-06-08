@@ -11,19 +11,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from models import Invoice, InvoiceItem
-from participant_rules import ALL_PARTICIPANTS, ANUJ, is_anuj_excluded
 
 
-HEADERS = [
-    "Items",
-    "Cost",
-    *ALL_PARTICIPANTS,
-    "Involved",
-    "Per Person",
-    *ALL_PARTICIPANTS,
-]
-FLAG_COLUMNS = ["C", "D", "E", "F", "G"]
-OWED_COLUMNS = ["J", "K", "L", "M", "N"]
 GREEN_FILL = PatternFill("solid", fgColor="D9EAD3")
 HEADER_FILL = PatternFill("solid", fgColor="D9EAD3")
 CURRENCY_FORMAT = "0.00"
@@ -31,7 +20,7 @@ INVALID_SHEET_CHARS = re.compile(r"[:\\/?*\[\]]")
 DATE_SHEET_RE = re.compile(r"^(?P<day>\d{1,2})\s+(?P<month>[A-Za-z]+)\s+(?P<year>\d{4})(?:\s+\d+)?$")
 
 
-def write_invoices(invoices: list[Invoice], output_path: Path) -> list[str]:
+def write_invoices(invoices: list[Invoice], output_path: Path, participants: list[str]) -> list[str]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     workbook = load_workbook(output_path) if output_path.exists() else Workbook()
 
@@ -42,7 +31,7 @@ def write_invoices(invoices: list[Invoice], output_path: Path) -> list[str]:
     for invoice in sorted(invoices, key=lambda current_invoice: current_invoice.order_date):
         sheet_name = unique_sheet_name(workbook.sheetnames, date_sheet_name(invoice.order_date))
         worksheet = workbook.create_sheet(sheet_name)
-        write_invoice_sheet(worksheet, invoice)
+        write_invoice_sheet(worksheet, invoice, participants)
         added_sheets.append(sheet_name)
 
     sort_worksheets_by_date(workbook)
@@ -50,17 +39,18 @@ def write_invoices(invoices: list[Invoice], output_path: Path) -> list[str]:
     return added_sheets
 
 
-def write_invoice_sheet(worksheet: Worksheet, invoice: Invoice) -> None:
+def write_invoice_sheet(worksheet: Worksheet, invoice: Invoice, participants: list[str]) -> None:
     title = f"Walmart {date_sheet_name(invoice.order_date)}"
     rows = list(invoice.items)
     if invoice.tax != Decimal("0"):
         rows.append(InvoiceItem(name="Walmart Tax", cost=invoice.tax))
 
-    _write_title(worksheet, title)
-    _write_headers(worksheet)
-    _write_item_rows(worksheet, rows, invoice.order_date)
-    _write_total_row(worksheet, len(rows))
-    _format_sheet(worksheet, len(rows))
+    layout = SheetLayout(participants)
+    _write_title(worksheet, title, layout)
+    _write_headers(worksheet, layout)
+    _write_item_rows(worksheet, rows, layout)
+    _write_total_row(worksheet, len(rows), layout)
+    _format_sheet(worksheet, len(rows), layout)
 
 
 def date_sheet_name(order_date: date) -> str:
@@ -131,8 +121,45 @@ def _month_number(month_name: str) -> int:
     return months[month_name]
 
 
-def _write_title(worksheet: Worksheet, title: str) -> None:
-    worksheet.merge_cells("A1:N1")
+class SheetLayout:
+    def __init__(self, participants: list[str]) -> None:
+        self.participants = participants
+        self.item_column = 1
+        self.quantity_column = 2
+        self.cost_column = 3
+        self.first_flag_column = 4
+        self.involved_column = self.first_flag_column + len(participants)
+        self.per_person_column = self.involved_column + 1
+        self.first_owed_column = self.per_person_column + 1
+        self.last_column = self.first_owed_column + len(participants) - 1
+
+    @property
+    def flag_columns(self) -> list[int]:
+        return list(range(self.first_flag_column, self.first_flag_column + len(self.participants)))
+
+    @property
+    def owed_columns(self) -> list[int]:
+        return list(range(self.first_owed_column, self.first_owed_column + len(self.participants)))
+
+    @property
+    def headers(self) -> list[str]:
+        return [
+            "Items",
+            "Qty",
+            "Cost",
+            *self.participants,
+            "Involved",
+            "Per Person",
+            *self.participants,
+        ]
+
+    @property
+    def title_range(self) -> str:
+        return f"A1:{get_column_letter(self.last_column)}1"
+
+
+def _write_title(worksheet: Worksheet, title: str, layout: SheetLayout) -> None:
+    worksheet.merge_cells(layout.title_range)
     cell = worksheet["A1"]
     cell.value = title
     cell.fill = GREEN_FILL
@@ -141,76 +168,65 @@ def _write_title(worksheet: Worksheet, title: str) -> None:
     worksheet.row_dimensions[1].height = 34
 
 
-def _write_headers(worksheet: Worksheet) -> None:
-    for column_index, header in enumerate(HEADERS, start=1):
+def _write_headers(worksheet: Worksheet, layout: SheetLayout) -> None:
+    for column_index, header in enumerate(layout.headers, start=1):
         cell = worksheet.cell(row=2, column=column_index, value=header)
         cell.fill = HEADER_FILL
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
 
-def _write_item_rows(worksheet: Worksheet, rows: list[InvoiceItem], order_date: date) -> None:
-    anuj_excluded = is_anuj_excluded(order_date)
+def _write_item_rows(worksheet: Worksheet, rows: list[InvoiceItem], layout: SheetLayout) -> None:
     for row_offset, item in enumerate(rows, start=3):
-        worksheet.cell(row=row_offset, column=1, value=item.name)
-        worksheet.cell(row=row_offset, column=2, value=float(item.cost))
+        worksheet.cell(row=row_offset, column=layout.item_column, value=item.name)
+        worksheet.cell(row=row_offset, column=layout.quantity_column, value=item.quantity)
+        worksheet.cell(row=row_offset, column=layout.cost_column, value=float(item.cost))
 
-        if anuj_excluded:
-            worksheet.cell(row=row_offset, column=14, value=0)
+        first_flag = get_column_letter(layout.flag_columns[0])
+        last_flag = get_column_letter(layout.flag_columns[-1])
+        involved = get_column_letter(layout.involved_column)
+        per_person = get_column_letter(layout.per_person_column)
+        cost = get_column_letter(layout.cost_column)
+        worksheet.cell(row=row_offset, column=layout.involved_column, value=f"=SUM({first_flag}{row_offset}:{last_flag}{row_offset})")
+        worksheet.cell(row=row_offset, column=layout.per_person_column, value=f"=IF({involved}{row_offset}=0,0,{cost}{row_offset}/{involved}{row_offset})")
 
-        worksheet.cell(row=row_offset, column=8, value=f"=SUM(C{row_offset}:G{row_offset})")
-        worksheet.cell(row=row_offset, column=9, value=f"=IF(H{row_offset}=0,0,B{row_offset}/H{row_offset})")
-
-        for flag_column, owed_column in zip(FLAG_COLUMNS, OWED_COLUMNS, strict=True):
-            if owed_column == "N" and anuj_excluded:
-                formula = "=0"
-            else:
-                formula = f"=IF({flag_column}{row_offset}=1,I{row_offset},0)"
-            worksheet[f"{owed_column}{row_offset}"] = formula
+        for flag_column, owed_column in zip(layout.flag_columns, layout.owed_columns, strict=True):
+            flag_letter = get_column_letter(flag_column)
+            owed_letter = get_column_letter(owed_column)
+            worksheet[f"{owed_letter}{row_offset}"] = f"=IF({flag_letter}{row_offset}=1,{per_person}{row_offset},0)"
 
 
-def _write_total_row(worksheet: Worksheet, item_count: int) -> None:
+def _write_total_row(worksheet: Worksheet, item_count: int, layout: SheetLayout) -> None:
     total_row = item_count + 3
     last_item_row = total_row - 1
-    worksheet.cell(row=total_row, column=1, value="Total")
-    worksheet.cell(row=total_row, column=2, value=f"=SUM(B3:B{last_item_row})")
+    cost_letter = get_column_letter(layout.cost_column)
+    worksheet.cell(row=total_row, column=layout.item_column, value="Total")
+    worksheet.cell(row=total_row, column=layout.cost_column, value=f"=SUM({cost_letter}3:{cost_letter}{last_item_row})")
 
-    for owed_column in OWED_COLUMNS:
-        worksheet[f"{owed_column}{total_row}"] = f"=SUM({owed_column}3:{owed_column}{last_item_row})"
+    for owed_column in layout.owed_columns:
+        owed_letter = get_column_letter(owed_column)
+        worksheet[f"{owed_letter}{total_row}"] = f"=SUM({owed_letter}3:{owed_letter}{last_item_row})"
 
-    for column in range(1, 15):
+    for column in range(1, layout.last_column + 1):
         worksheet.cell(row=total_row, column=column).font = Font(bold=True)
 
 
-def _format_sheet(worksheet: Worksheet, item_count: int) -> None:
+def _format_sheet(worksheet: Worksheet, item_count: int, layout: SheetLayout) -> None:
     worksheet.freeze_panes = "A3"
 
-    widths = {
-        "A": 28,
-        "B": 12,
-        "C": 12,
-        "D": 12,
-        "E": 12,
-        "F": 12,
-        "G": 12,
-        "H": 12,
-        "I": 12,
-        "J": 12,
-        "K": 12,
-        "L": 12,
-        "M": 12,
-        "N": 12,
-    }
-    for column, width in widths.items():
-        worksheet.column_dimensions[column].width = width
+    worksheet.column_dimensions["A"].width = 28
+    worksheet.column_dimensions[get_column_letter(layout.quantity_column)].width = 10
+    for column_index in range(3, layout.last_column + 1):
+        worksheet.column_dimensions[get_column_letter(column_index)].width = 12
 
     final_row = item_count + 3
     for row in range(3, final_row + 1):
-        for column in (2, 9, 10, 11, 12, 13, 14):
+        money_columns = [layout.cost_column, layout.per_person_column, *layout.owed_columns]
+        for column in money_columns:
             worksheet.cell(row=row, column=column).number_format = CURRENCY_FORMAT
-        for column in range(2, 15):
+        for column in range(2, layout.last_column + 1):
             worksheet.cell(row=row, column=column).alignment = Alignment(horizontal="right")
 
-    for column_index in range(1, 15):
+    for column_index in range(1, layout.last_column + 1):
         column_letter = get_column_letter(column_index)
         worksheet[f"{column_letter}1"].fill = GREEN_FILL

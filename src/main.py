@@ -7,12 +7,22 @@ import sys
 from excel_writer import write_invoices
 from models import Invoice, ProcessingResult
 from pdf_reader import extract_text
+from settings import SettingsError, load_settings
 from walmart_parser import parse_invoice_text
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    result = process_invoices(args.input, args.output)
+    try:
+        settings = load_settings(PROJECT_ROOT / ".env", args.participants, args.output)
+    except SettingsError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    result = process_invoices(args.input, settings.output_file, settings.participants)
     print_summary(result)
     return 0 if not result.failed_files else 1
 
@@ -23,13 +33,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("output/walmart_orders.xlsx"),
-        help="Excel workbook path to create or append to.",
+        default=None,
+        help="Excel workbook path to create or append to. Overrides OUTPUT_FILE in .env.",
+    )
+    parser.add_argument(
+        "--participants",
+        nargs="+",
+        default=None,
+        help="Participant names. Overrides PARTICIPANTS in .env.",
     )
     return parser.parse_args(argv)
 
 
-def process_invoices(input_dir: Path, output_path: Path) -> ProcessingResult:
+def process_invoices(input_dir: Path, output_path: Path, participants: list[str]) -> ProcessingResult:
     if not input_dir.exists():
         input_dir.mkdir(parents=True, exist_ok=True)
 
@@ -51,7 +67,7 @@ def process_invoices(input_dir: Path, output_path: Path) -> ProcessingResult:
 
         invoices.append(invoice)
 
-    added_sheets = write_invoices(invoices, output_path) if invoices else []
+    added_sheets = write_invoices(invoices, output_path, participants) if invoices else []
     return ProcessingResult(
         found_pdf_count=len(pdf_paths),
         parsed_count=len(invoices),

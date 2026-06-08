@@ -2,8 +2,6 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from openpyxl import load_workbook
-
 from src import main
 from src.models import Invoice, InvoiceItem
 
@@ -31,13 +29,60 @@ def test_cli_processes_multiple_pdfs_with_mocked_extraction(tmp_path, monkeypatc
             raw_text=raw_text,
         )
 
+    captured: dict[str, object] = {}
+
+    def fake_write_invoices(invoices: list[Invoice], output: Path, participants: list[str]) -> list[str]:
+        captured["invoices"] = invoices
+        captured["output"] = output
+        captured["participants"] = participants
+        return [f"{invoice.order_date.day} May 2024" for invoice in invoices]
+
     monkeypatch.setattr(main, "extract_text", fake_extract_text)
     monkeypatch.setattr(main, "parse_invoice_text", fake_parse_invoice_text)
+    monkeypatch.setattr(main, "write_invoices", fake_write_invoices)
 
-    result = main.process_invoices(input_dir, output_path)
+    result = main.process_invoices(input_dir, output_path, ["Alice", "Bob"])
 
     assert result.found_pdf_count == 2
     assert result.parsed_count == 2
     assert result.failed_files == []
     assert result.added_sheets == ["1 May 2024", "2 May 2024"]
-    assert load_workbook(output_path).sheetnames == ["1 May 2024", "2 May 2024"]
+    assert captured["output"] == output_path
+    assert captured["participants"] == ["Alice", "Bob"]
+
+
+def test_main_uses_cli_overrides(tmp_path, monkeypatch):
+    input_dir = tmp_path / "input"
+    output_path = tmp_path / "custom.xlsx"
+    captured: dict[str, object] = {}
+
+    def fake_process_invoices(input_path: Path, output: Path, participants: list[str]):
+        captured["input"] = input_path
+        captured["output"] = output
+        captured["participants"] = participants
+        return main.ProcessingResult(
+            found_pdf_count=0,
+            parsed_count=0,
+            failed_files=[],
+            added_sheets=[],
+            output_path=output,
+        )
+
+    monkeypatch.setattr(main, "process_invoices", fake_process_invoices)
+
+    exit_code = main.main(
+        [
+            "--input",
+            str(input_dir),
+            "--output",
+            str(output_path),
+            "--participants",
+            "Alice",
+            "Bob",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["input"] == input_dir
+    assert captured["output"] == output_path
+    assert captured["participants"] == ["Alice", "Bob"]

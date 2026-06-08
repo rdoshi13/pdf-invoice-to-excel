@@ -16,6 +16,7 @@ env/
 # Local environment files
 .env
 .env.*
+!.env.example
 AGENTS.md
 
 # OS/editor noise
