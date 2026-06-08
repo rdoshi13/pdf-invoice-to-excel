@@ -38,6 +38,7 @@ The app automatically reads from `input/` and writes to `output/walmart_orders.x
 
 - Reads every `.pdf` file from an input folder.
 - Extracts text from Walmart invoice/order PDFs.
+- Falls back to local OCR for scanned PDFs when normal PDF text extraction is empty or too short.
 - Parses order date, order number, item names, quantities, item costs, tax, and total.
 - Creates or updates a single `.xlsx` workbook.
 - Adds one worksheet per invoice, named by order date, such as `1 March 2024` or `16 June 2025`.
@@ -50,8 +51,35 @@ The app automatically reads from `input/` and writes to `output/walmart_orders.x
 
 - Python 3.11 or newer recommended
 - `pdfplumber`
+- `pytesseract`
+- `pdf2image`
+- `pillow`
 - `openpyxl`
 - `pytest` for running tests
+
+For OCR fallback, install the native Tesseract and Poppler tools too.
+
+macOS:
+
+```bash
+brew install tesseract poppler
+```
+
+Windows PowerShell:
+
+```powershell
+winget install UB-Mannheim.TesseractOCR
+winget install oschwartz10612.Poppler
+```
+
+After installing on Windows, close and reopen PowerShell so `PATH` refreshes, then verify:
+
+```powershell
+tesseract --version
+pdftoppm -v
+```
+
+If `pdftoppm` is not found, add Poppler's `bin` folder to your Windows `PATH`.
 
 ## Advanced Usage
 
@@ -146,7 +174,7 @@ Known item statuses include:
 - `Return complete`
 - `You're all set! No need to return this item`
 
-If a PDF cannot be parsed, the app skips it, continues processing the rest, and writes debug text under `output/debug/` when extracted text is available.
+If a PDF has little or no embedded text, the app falls back to local Tesseract OCR and then sends the OCR text through the same Walmart parser. If a PDF still cannot be parsed, the app skips it, continues processing the rest, and writes debug text under `output/debug/` when extracted text is available.
 
 ## Running Tests
 
@@ -173,7 +201,6 @@ tests/
 ## Limitations
 
 - Walmart invoices only.
-- No OCR for scanned PDFs.
 - No web UI.
 - No Google Sheets API integration.
 - No cloud upload.
@@ -181,7 +208,6 @@ tests/
 
 ## Future Ideas
 
-- Add OCR fallback for scanned invoices.
 - Add support for more stores.
 - Add a summary sheet across all orders.
 - Detect duplicate PDFs by order number.
