@@ -16,14 +16,15 @@ from participant_rules import ALL_PARTICIPANTS, ANUJ, is_anuj_excluded
 
 HEADERS = [
     "Items",
+    "Qty",
     "Cost",
     *ALL_PARTICIPANTS,
     "Involved",
     "Per Person",
     *ALL_PARTICIPANTS,
 ]
-FLAG_COLUMNS = ["C", "D", "E", "F", "G"]
-OWED_COLUMNS = ["J", "K", "L", "M", "N"]
+FLAG_COLUMNS = ["D", "E", "F", "G", "H"]
+OWED_COLUMNS = ["K", "L", "M", "N", "O"]
 GREEN_FILL = PatternFill("solid", fgColor="D9EAD3")
 HEADER_FILL = PatternFill("solid", fgColor="D9EAD3")
 CURRENCY_FORMAT = "0.00"
@@ -132,7 +133,7 @@ def _month_number(month_name: str) -> int:
 
 
 def _write_title(worksheet: Worksheet, title: str) -> None:
-    worksheet.merge_cells("A1:N1")
+    worksheet.merge_cells("A1:O1")
     cell = worksheet["A1"]
     cell.value = title
     cell.fill = GREEN_FILL
@@ -153,19 +154,20 @@ def _write_item_rows(worksheet: Worksheet, rows: list[InvoiceItem], order_date: 
     anuj_excluded = is_anuj_excluded(order_date)
     for row_offset, item in enumerate(rows, start=3):
         worksheet.cell(row=row_offset, column=1, value=item.name)
-        worksheet.cell(row=row_offset, column=2, value=float(item.cost))
+        worksheet.cell(row=row_offset, column=2, value=item.quantity)
+        worksheet.cell(row=row_offset, column=3, value=float(item.cost))
 
         if anuj_excluded:
-            worksheet.cell(row=row_offset, column=14, value=0)
+            worksheet.cell(row=row_offset, column=15, value=0)
 
-        worksheet.cell(row=row_offset, column=8, value=f"=SUM(C{row_offset}:G{row_offset})")
-        worksheet.cell(row=row_offset, column=9, value=f"=IF(H{row_offset}=0,0,B{row_offset}/H{row_offset})")
+        worksheet.cell(row=row_offset, column=9, value=f"=SUM(D{row_offset}:H{row_offset})")
+        worksheet.cell(row=row_offset, column=10, value=f"=IF(I{row_offset}=0,0,C{row_offset}/I{row_offset})")
 
         for flag_column, owed_column in zip(FLAG_COLUMNS, OWED_COLUMNS, strict=True):
-            if owed_column == "N" and anuj_excluded:
+            if owed_column == "O" and anuj_excluded:
                 formula = "=0"
             else:
-                formula = f"=IF({flag_column}{row_offset}=1,I{row_offset},0)"
+                formula = f"=IF({flag_column}{row_offset}=1,J{row_offset},0)"
             worksheet[f"{owed_column}{row_offset}"] = formula
 
 
@@ -173,12 +175,12 @@ def _write_total_row(worksheet: Worksheet, item_count: int) -> None:
     total_row = item_count + 3
     last_item_row = total_row - 1
     worksheet.cell(row=total_row, column=1, value="Total")
-    worksheet.cell(row=total_row, column=2, value=f"=SUM(B3:B{last_item_row})")
+    worksheet.cell(row=total_row, column=3, value=f"=SUM(C3:C{last_item_row})")
 
     for owed_column in OWED_COLUMNS:
         worksheet[f"{owed_column}{total_row}"] = f"=SUM({owed_column}3:{owed_column}{last_item_row})"
 
-    for column in range(1, 15):
+    for column in range(1, 16):
         worksheet.cell(row=total_row, column=column).font = Font(bold=True)
 
 
@@ -187,7 +189,7 @@ def _format_sheet(worksheet: Worksheet, item_count: int) -> None:
 
     widths = {
         "A": 28,
-        "B": 12,
+        "B": 10,
         "C": 12,
         "D": 12,
         "E": 12,
@@ -200,17 +202,18 @@ def _format_sheet(worksheet: Worksheet, item_count: int) -> None:
         "L": 12,
         "M": 12,
         "N": 12,
+        "O": 12,
     }
     for column, width in widths.items():
         worksheet.column_dimensions[column].width = width
 
     final_row = item_count + 3
     for row in range(3, final_row + 1):
-        for column in (2, 9, 10, 11, 12, 13, 14):
+        for column in (3, 10, 11, 12, 13, 14, 15):
             worksheet.cell(row=row, column=column).number_format = CURRENCY_FORMAT
-        for column in range(2, 15):
+        for column in range(2, 16):
             worksheet.cell(row=row, column=column).alignment = Alignment(horizontal="right")
 
-    for column_index in range(1, 15):
+    for column_index in range(1, 16):
         column_letter = get_column_letter(column_index)
         worksheet[f"{column_letter}1"].fill = GREEN_FILL
