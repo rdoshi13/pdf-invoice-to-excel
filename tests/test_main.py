@@ -21,6 +21,7 @@ def test_cli_processes_multiple_pdfs_with_mocked_extraction(tmp_path, monkeypatc
         day = 1 if source_path.name == "a.pdf" else 2
         return Invoice(
             source_path=source_path,
+            store_name="Walmart",
             order_date=date(2024, 5, day),
             order_number=source_path.stem,
             items=[InvoiceItem("Apple", Decimal("2.00"))],
@@ -86,3 +87,25 @@ def test_main_uses_cli_overrides(tmp_path, monkeypatch):
     assert captured["input"] == input_dir
     assert captured["output"] == output_path
     assert captured["participants"] == ["Alice", "Bob"]
+
+
+def test_process_invoices_writes_debug_when_extraction_fails(tmp_path, monkeypatch):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    pdf_path = input_dir / "scan.pdf"
+    pdf_path.write_text("pdf", encoding="utf-8")
+    output_path = tmp_path / "output" / "walmart_orders.xlsx"
+
+    def fake_extract_text(source_path: Path) -> str:
+        raise RuntimeError("Extraction failed")
+
+    monkeypatch.setattr(main, "extract_text", fake_extract_text)
+
+    result = main.process_invoices(input_dir, output_path, ["Alice"])
+
+    debug_file = tmp_path / "output" / "debug" / "scan.txt"
+    assert result.failed_files == [pdf_path]
+    assert debug_file.exists()
+    debug_text = debug_file.read_text(encoding="utf-8")
+    assert "Extraction failed" in debug_text
+    assert "[no text extracted]" in debug_text

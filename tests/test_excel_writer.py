@@ -11,6 +11,7 @@ from src.models import Invoice, InvoiceItem
 def make_invoice(order_date: date, source: str = "invoice.pdf") -> Invoice:
     return Invoice(
         source_path=Path(source),
+        store_name="Walmart",
         order_date=order_date,
         order_number="123",
         items=[
@@ -128,3 +129,15 @@ def test_worksheets_are_sorted_by_date(tmp_path):
     assert added == ["20 April 2024", "12 May 2024", "18 August 2024", "18 February 2025"]
     workbook = load_workbook(output_path)
     assert workbook.sheetnames == ["20 April 2024", "12 May 2024", "18 August 2024", "18 February 2025"]
+
+
+def test_title_and_tax_row_use_invoice_store_name(tmp_path):
+    output_path = tmp_path / "orders.xlsx"
+    invoice = make_invoice(date(2024, 7, 10))
+    invoice.store_name = "Target"
+
+    added = write_invoices([invoice], output_path, ["Alice", "Bob"])
+
+    worksheet = load_workbook(output_path, data_only=False)[added[0]]
+    assert worksheet["A1"].value == "Target 10 July 2024"
+    assert worksheet["A5"].value == "Target Tax"

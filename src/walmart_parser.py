@@ -11,7 +11,12 @@ from models import Invoice, InvoiceItem
 DATE_RE = re.compile(r"\b([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})\s+order\b")
 ORDER_RE = re.compile(r"\bOrder#\s*([A-Za-z0-9-]+)")
 MONEY_RE_TEMPLATE = r"\b{label}\s+\$(-?\d+(?:,\d{{3}})*(?:\.\d{{2}})?)"
-ITEM_RE = re.compile(r"^(?P<body>.+?)\s+Qty\s+(?P<qty>\d+(?:\.\d+)?)\s+\$(?P<cost>-?\d+(?:,\d{3})*(?:\.\d{2})?)$")
+ITEM_RE = re.compile(
+    r"^(?P<body>.+?)\s+"
+    r"Qty\s*(?P<qty>\d+(?:\.\d+)?)"
+    r"\s+\$(?P<cost>-?\d+(?:,\d{3})*(?:\.\d{2})?)$",
+    re.IGNORECASE,
+)
 STATUS_PATTERNS = [
     "You're all set! No need to return this item",
     "You\u2019re all set! No need to return this item",
@@ -47,6 +52,7 @@ def parse_invoice_text(raw_text: str, source_path: Path) -> Invoice:
 
     return Invoice(
         source_path=source_path,
+        store_name="Walmart",
         order_date=order_date,
         order_number=_parse_order_number(raw_text),
         items=items,

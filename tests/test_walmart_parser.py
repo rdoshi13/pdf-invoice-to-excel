@@ -62,6 +62,25 @@ def test_parse_invoice_items_and_statuses():
     assert invoice.items[-1].cost == Decimal("6.51")
 
 
+def test_parse_item_rows_with_compact_qty_spacing():
+    text = """Invoice
+Apr 20, 2024 order
+Order# 2000118-26319980
+Fresh Serrano Pepper, 4 Ounce Bag Weight-adjusted Qty1 $1.59
+Fresh Cilantro, Bunch Weight-adjusted Qty 3 1.71
+Subtotal $56.35
+Tax $0.99
+Total $56.10
+"""
+
+    invoice = parse_invoice_text(text, Path("scan.pdf"))
+
+    assert invoice.order_date.isoformat() == "2024-04-20"
+    assert invoice.tax == Decimal("0.99")
+    assert [item.quantity for item in invoice.items] == ["1"]
+    assert [item.cost for item in invoice.items] == [Decimal("1.59")]
+
+
 def test_missing_optional_total_is_none():
     text = SAMPLE_TEXT.replace("Total $37.49\n", "")
 

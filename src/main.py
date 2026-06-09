@@ -3,12 +3,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+import traceback
 
 from excel_writer import write_invoices
 from models import Invoice, ProcessingResult
 from pdf_reader import extract_text
 from settings import SettingsError, load_settings
-from walmart_parser import parse_invoice_text
+from invoice_parser import parse_invoice_text
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -28,8 +29,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert Walmart invoice PDFs to an Excel split workbook.")
-    parser.add_argument("--input", type=Path, default=Path("input"), help="Folder containing Walmart invoice PDFs.")
+    parser = argparse.ArgumentParser(description="Convert supported invoice PDFs to an Excel split workbook.")
+    parser.add_argument("--input", type=Path, default=Path("input"), help="Folder containing invoice PDFs.")
     parser.add_argument(
         "--output",
         type=Path,
@@ -61,8 +62,7 @@ def process_invoices(input_dir: Path, output_path: Path, participants: list[str]
             invoice = parse_invoice_text(raw_text, pdf_path)
         except Exception as exc:
             failed_files.append(pdf_path)
-            if raw_text:
-                _write_debug_text(debug_dir, pdf_path, raw_text, exc)
+            _write_debug_text(debug_dir, pdf_path, raw_text, exc)
             continue
 
         invoices.append(invoice)
@@ -97,7 +97,11 @@ def print_summary(result: ProcessingResult) -> None:
 def _write_debug_text(debug_dir: Path, pdf_path: Path, raw_text: str, error: Exception) -> None:
     debug_dir.mkdir(parents=True, exist_ok=True)
     debug_path = debug_dir / f"{pdf_path.stem}.txt"
-    debug_path.write_text(f"Error: {error}\n\n{raw_text}", encoding="utf-8")
+    traceback_text = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+    debug_path.write_text(
+        f"Error: {error}\n\nTraceback:\n{traceback_text}\n\nExtracted text:\n{raw_text or '[no text extracted]'}",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

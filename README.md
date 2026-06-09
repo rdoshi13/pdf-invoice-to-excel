@@ -1,8 +1,8 @@
 # pdf-invoice-to-excel
 
-A local Python command-line tool that converts Walmart invoice PDFs into an Excel workbook for grocery cost splitting.
+A local Python command-line tool that converts supported store invoice PDFs into an Excel workbook for cost splitting.
 
-Add your participant names once in a local `.env` file, drop Walmart order/invoice PDFs into `input/`, run one command, and the app creates a workbook where each invoice becomes its own worksheet. The generated sheets include item quantities, item costs, editable participant flags, per-person formulas, and final totals.
+Add your participant names once in a local `.env` file, drop supported order/invoice PDFs into `input/`, run one command, and the app creates a workbook where each invoice becomes its own worksheet. The generated sheets include item quantities, item costs, editable participant flags, per-person formulas, and final totals.
 
 ## How To Use
 
@@ -25,7 +25,7 @@ PARTICIPANTS=Alice,Bob,Charlie
 OUTPUT_FILE=output/walmart_orders.xlsx
 ```
 
-4. Put your Walmart invoice PDFs into the `input/` folder.
+4. Put your invoice PDFs into the `input/` folder.
 5. Run:
 
 ```bash
@@ -37,8 +37,7 @@ The app automatically reads from `input/` and writes to `output/walmart_orders.x
 ## What It Does
 
 - Reads every `.pdf` file from an input folder.
-- Extracts text from Walmart invoice/order PDFs.
-- Falls back to local OCR for scanned PDFs when normal PDF text extraction is empty or too short.
+- Extracts text from supported invoice/order PDFs.
 - Parses order date, order number, item names, quantities, item costs, tax, and total.
 - Creates or updates a single `.xlsx` workbook.
 - Adds one worksheet per invoice, named by order date, such as `1 March 2024` or `16 June 2025`.
@@ -51,35 +50,8 @@ The app automatically reads from `input/` and writes to `output/walmart_orders.x
 
 - Python 3.11 or newer recommended
 - `pdfplumber`
-- `pytesseract`
-- `pdf2image`
-- `pillow`
 - `openpyxl`
 - `pytest` for running tests
-
-For OCR fallback, install the native Tesseract and Poppler tools too.
-
-macOS:
-
-```bash
-brew install tesseract poppler
-```
-
-Windows PowerShell:
-
-```powershell
-winget install UB-Mannheim.TesseractOCR
-winget install oschwartz10612.Poppler
-```
-
-After installing on Windows, close and reopen PowerShell so `PATH` refreshes, then verify:
-
-```powershell
-tesseract --version
-pdftoppm -v
-```
-
-If `pdftoppm` is not found, add Poppler's `bin` folder to your Windows `PATH`.
 
 ## Advanced Usage
 
@@ -141,7 +113,7 @@ the headers are:
 Items | Qty | Cost | Alice | Bob | Charlie | Involved | Per Person | Alice | Bob | Charlie
 ```
 
-The app also adds `Walmart Tax` as a split-able row when tax is present in the invoice.
+The app also adds a store-specific tax row, such as `Walmart Tax` or `Target Tax`, when tax is present in the invoice.
 
 Generated formulas follow this pattern:
 
@@ -152,6 +124,17 @@ Owed       = IF(participant flag=1,Per Person,0)
 ```
 
 The final row sums total item cost and each participant's owed amount.
+
+## Supported Stores
+
+The app currently has deterministic text parsers for:
+
+- Walmart
+- Amazon
+- Costco
+- Target
+
+The parser tries each supported store and uses the first one that matches. If none match, the PDF is skipped and a debug text file is written under `output/debug/`.
 
 ## Supported Input
 
@@ -167,6 +150,8 @@ Tax $0.93
 Total $37.49
 ```
 
+Amazon PDFs can be invoice tables with fields similar to `Description`, `Qty`, `Unit price`, and `Item subtotal`, or Amazon `Order Details` summaries where each item name is followed by `Sold by:` and a standalone price. Target and Costco parsers look for order date/order number fields plus item rows with quantity and final line cost.
+
 Known item statuses include:
 
 - `Weight-adjusted`
@@ -174,7 +159,7 @@ Known item statuses include:
 - `Return complete`
 - `You're all set! No need to return this item`
 
-If a PDF has little or no embedded text, the app falls back to local Tesseract OCR and then sends the OCR text through the same Walmart parser. If a PDF still cannot be parsed, the app skips it, continues processing the rest, and writes debug text under `output/debug/` when extracted text is available.
+If a PDF has little or no embedded text, the app skips it and writes a debug file under `output/debug/`. Scanned/image PDFs are not supported in the CLI version because OCR can silently drop or misread invoice rows.
 
 ## Running Tests
 
@@ -182,7 +167,7 @@ If a PDF has little or no embedded text, the app falls back to local Tesseract O
 pytest
 ```
 
-The tests cover `.env` settings, Walmart parsing, workbook formulas/layout, duplicate sheet names, date sorting, and CLI orchestration.
+The tests cover `.env` settings, store parsing, workbook formulas/layout, duplicate sheet names, date sorting, and CLI orchestration.
 
 ## Project Structure
 
@@ -192,7 +177,11 @@ src/
   settings.py       Local .env settings loader
   models.py         Shared dataclasses
   pdf_reader.py     PDF text extraction
+  invoice_parser.py Store parser dispatcher
   walmart_parser.py Walmart invoice parser
+  amazon_parser.py  Amazon invoice parser
+  costco_parser.py  Costco invoice parser
+  target_parser.py  Target invoice parser
   excel_writer.py   Workbook generation
 tests/
   test_*.py
@@ -200,7 +189,8 @@ tests/
 
 ## Limitations
 
-- Walmart invoices only.
+- Supported stores only: Walmart, Amazon, Costco, and Target.
+- Text-based PDFs only; scanned/image PDFs are not supported.
 - No web UI.
 - No Google Sheets API integration.
 - No cloud upload.
@@ -209,6 +199,8 @@ tests/
 ## Future Ideas
 
 - Add support for more stores.
+- Add sample fixture folders for each supported store.
+- Add OCR later only with a review UI or review sheet.
 - Add a summary sheet across all orders.
 - Detect duplicate PDFs by order number.
 - Add monthly spending summaries.

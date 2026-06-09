@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pdf2image import convert_from_path
 import pdfplumber
-import pytesseract
 
 
 MIN_EXTRACTED_TEXT_LENGTH = 40
-OCR_DPI = 300
+
+
+class TextExtractionError(ValueError):
+    pass
 
 
 def extract_text(pdf_path: Path) -> str:
@@ -16,8 +17,10 @@ def extract_text(pdf_path: Path) -> str:
     if len(extracted_text) >= MIN_EXTRACTED_TEXT_LENGTH:
         return extracted_text
 
-    ocr_text = extract_text_with_ocr(pdf_path)
-    return ocr_text or extracted_text
+    raise TextExtractionError(
+        f"{pdf_path} does not contain enough embedded text to parse. "
+        "Scanned/image PDFs are not supported by the CLI version."
+    )
 
 
 def extract_text_with_pdfplumber(pdf_path: Path) -> str:
@@ -27,15 +30,5 @@ def extract_text_with_pdfplumber(pdf_path: Path) -> str:
             text = page.extract_text() or ""
             if text.strip():
                 page_texts.append(text)
-
-    return "\n".join(page_texts).strip()
-
-
-def extract_text_with_ocr(pdf_path: Path) -> str:
-    page_texts: list[str] = []
-    for page_image in convert_from_path(pdf_path, dpi=OCR_DPI):
-        text = pytesseract.image_to_string(page_image) or ""
-        if text.strip():
-            page_texts.append(text)
 
     return "\n".join(page_texts).strip()

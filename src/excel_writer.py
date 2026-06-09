@@ -40,10 +40,10 @@ def write_invoices(invoices: list[Invoice], output_path: Path, participants: lis
 
 
 def write_invoice_sheet(worksheet: Worksheet, invoice: Invoice, participants: list[str]) -> None:
-    title = f"Walmart {date_sheet_name(invoice.order_date)}"
+    title = f"{invoice.store_name} {date_sheet_name(invoice.order_date)}"
     rows = list(invoice.items)
     if invoice.tax != Decimal("0"):
-        rows.append(InvoiceItem(name="Walmart Tax", cost=invoice.tax))
+        rows.append(InvoiceItem(name=f"{invoice.store_name} Tax", cost=invoice.tax))
 
     layout = SheetLayout(participants)
     _write_title(worksheet, title, layout)

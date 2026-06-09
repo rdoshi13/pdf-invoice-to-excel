@@ -17,6 +17,7 @@ class InvoiceItem:
 @dataclass
 class Invoice:
     source_path: Path
+    store_name: str
     order_date: date
     order_number: str | None
     items: list[InvoiceItem]
